@@ -1,0 +1,721 @@
+<title>국민연금 정산기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+
+<style>
+  /* 영상과 같은 팔레트. 채널에서 넘어온 사람이 같은 곳이라고 느껴야 한다.
+     다크 단일 테마로 의도적으로 고정하고, 모든 색을 명시한다. */
+  :root {
+    --ink-0: #05081a;
+    --ink-1: #0b1230;
+    --ink-2: #151e45;
+    --line: #26315e;
+    --fund: #22d3ee;
+    --gen: #fb8b24;
+    --alert: #f2555a;
+    --text: #eef2ff;
+    --dim: #8590b5;
+
+    --sans: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding-block: 0 64px;
+    padding-inline: 20px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, var(--ink-2) 0%, var(--ink-1) 45%, var(--ink-0) 100%)
+      var(--ink-0);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ── 헤더 ─────────────────────────────────────────── */
+  header { padding-block: 56px 40px; }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    color: var(--dim);
+    text-transform: none;
+  }
+  .brand svg { display: block; }
+
+  h1 {
+    margin: 18px 0 0;
+    font-size: clamp(34px, 6vw, 52px);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 14px 0 0;
+    max-width: 62ch;
+    font-size: 17px;
+    color: var(--dim);
+  }
+  .lede b { color: var(--text); font-weight: 500; }
+
+  /* ── 레이아웃 ─────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: color-mix(in srgb, var(--ink-2) 70%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+  .panel h2 {
+    margin: 0 0 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--dim);
+  }
+
+  /* ── 컨트롤 ───────────────────────────────────────── */
+  .field { margin-bottom: 22px; }
+  .field:last-child { margin-bottom: 0; }
+
+  .field-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 9px;
+  }
+  .field-head label { font-size: 14px; font-weight: 500; color: var(--dim); }
+  .field-head output {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .field--key .field-head label { color: var(--gen); }
+  .field--key .field-head output { color: var(--gen); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    margin: 0;
+    border-radius: 2px;
+    background: var(--line);
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--fund);
+    border: 3px solid var(--ink-1);
+    box-shadow: 0 0 0 1px var(--fund);
+    cursor: grab;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--fund);
+    border: 3px solid var(--ink-1);
+    box-shadow: 0 0 0 1px var(--fund);
+    cursor: grab;
+    border-width: 3px;
+  }
+  .field--key input[type="range"]::-webkit-slider-thumb {
+    background: var(--gen); box-shadow: 0 0 0 1px var(--gen);
+  }
+  .field--key input[type="range"]::-moz-range-thumb {
+    background: var(--gen); box-shadow: 0 0 0 1px var(--gen);
+  }
+  input[type="range"]:focus-visible { outline: 2px solid var(--fund); outline-offset: 6px; }
+
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1;
+    padding: 9px 0;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] {
+    color: var(--ink-0);
+    background: var(--fund);
+    border-color: var(--fund);
+    font-weight: 700;
+  }
+  .seg button:focus-visible { outline: 2px solid var(--fund); outline-offset: 2px; }
+
+  .reset {
+    margin-top: 24px;
+    width: 100%;
+    padding: 10px 0;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dim);
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .reset:hover { color: var(--text); border-color: var(--dim); }
+
+  /* ── 결과 ─────────────────────────────────────────── */
+  .verdict {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px 28px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ratio {
+    font-family: var(--mono);
+    font-size: clamp(64px, 13vw, 104px);
+    font-weight: 600;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .ratio small { font-family: var(--sans); font-size: 0.34em; font-weight: 500; margin-left: 6px; }
+  .verdict-note { font-size: 15px; color: var(--dim); padding-bottom: 8px; }
+  .verdict-note strong { display: block; font-size: 19px; font-weight: 700; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 2px;
+    margin-top: 22px;
+  }
+  .stat { padding: 4px 0; }
+  .stat dt { font-size: 13px; color: var(--dim); margin-bottom: 4px; }
+  .stat dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat dd span { font-family: var(--sans); font-size: 14px; font-weight: 500; color: var(--dim); margin-left: 3px; }
+
+  /* ── 차트 ─────────────────────────────────────────── */
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .chart h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .chart p { margin: 0 0 14px; font-size: 13px; color: var(--dim); }
+  .chart svg { width: 100%; height: auto; display: block; }
+
+  /* ── 하단 ─────────────────────────────────────────── */
+  .notes { margin-top: 28px; display: grid; gap: 20px; }
+  .notes h2 { margin: 0 0 12px; }
+  .notes dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 7px 20px; font-size: 14px; }
+  .notes dt { color: var(--dim); }
+  .notes dd { margin: 0; font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .notes p { margin: 0 0 12px; font-size: 14px; color: var(--dim); max-width: 68ch; }
+  .notes p:last-child { margin-bottom: 0; }
+  .notes b { color: var(--text); font-weight: 500; }
+  .src { font-size: 13px; color: var(--dim); line-height: 1.9; }
+  .src span { display: block; }
+
+  footer {
+    margin-top: 36px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--dim);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ratio, .stat dd { transition: color 220ms ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="26" y="16" width="20" height="60" rx="4" fill="#22d3ee"></rect>
+        <rect x="56" y="69" width="20" height="7" rx="2.5" fill="#fb8b24"></rect>
+        <rect x="18" y="76" width="64" height="3" rx="1.5" fill="#eef2ff"></rect>
+      </svg>
+      인생 정산소
+    </div>
+    <h1>국민연금 정산기</h1>
+    <p class="lede">
+      영상에서 쓴 계산을 그대로 옮겼습니다. 조건을 바꾸면 수익비가 바로 따라 움직입니다.
+      <b>특히 할인율 하나만 흔들어 보세요.</b> 이득이 손해가 되는 지점이 보입니다.
+    </p>
+  </header>
+
+  <div class="grid">
+    <!-- 조건 -->
+    <section class="panel" aria-label="조건">
+      <h2>조건</h2>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="birth">출생연도</label>
+          <output id="birth-out" for="birth">1990년</output>
+        </div>
+        <input type="range" id="birth" min="1950" max="2005" step="1" value="1990">
+      </div>
+
+      <div class="field">
+        <div class="field-head"><label id="sex-label">성별</label></div>
+        <div class="seg" role="group" aria-labelledby="sex-label">
+          <button type="button" id="sex-m" aria-pressed="true">남성</button>
+          <button type="button" id="sex-f" aria-pressed="false">여성</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="income">가입기간 평균 월소득</label>
+          <output id="income-out" for="income">320만원</output>
+        </div>
+        <input type="range" id="income" min="100" max="600" step="10" value="320">
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="years">가입 기간</label>
+          <output id="years-out" for="years">33년</output>
+        </div>
+        <input type="range" id="years" min="10" max="40" step="1" value="33">
+      </div>
+
+      <div class="field field--key">
+        <div class="field-head">
+          <label for="disc">실질 할인율</label>
+          <output id="disc-out" for="disc">0.55%</output>
+        </div>
+        <input type="range" id="disc" min="0" max="300" step="5" value="55">
+      </div>
+
+      <button type="button" class="reset" id="reset">영상과 같은 조건으로 되돌리기</button>
+    </section>
+
+    <!-- 결과 -->
+    <section class="panel" aria-label="정산 결과" aria-live="polite">
+      <h2>정산 결과</h2>
+
+      <div class="verdict">
+        <div class="ratio" id="ratio">1.62<small>배</small></div>
+        <p class="verdict-note">
+          <strong id="verdict-line">낸 돈보다 많이 받습니다</strong>
+          수익비 = 평생 받는 돈 ÷ 평생 내는 돈
+        </p>
+      </div>
+
+      <dl class="stats">
+        <div class="stat"><dt>평생 내는 돈</dt><dd id="paid">1.60<span>억원</span></dd></div>
+        <div class="stat"><dt>평생 받는 돈</dt><dd id="recv">2.60<span>억원</span></dd></div>
+        <div class="stat"><dt>손익분기</dt><dd id="be">78<span>세</span></dd></div>
+        <div class="stat"><dt>월 수령액</dt><dd id="monthly">123<span>만원</span></dd></div>
+      </dl>
+
+      <div class="charts">
+        <div class="chart">
+          <h3>할인율에 따라 수익비가 어떻게 움직이나</h3>
+          <p>가로축 실질 할인율 · 가로 점선이 본전(1.0배)</p>
+          <svg id="curve" viewBox="0 0 420 240" role="img"
+               aria-label="할인율에 따른 수익비 곡선"></svg>
+        </div>
+        <div class="chart">
+          <h3>누적으로 보면 언제 본전인가</h3>
+          <p>가로축 나이 · 두 선이 만나는 곳이 손익분기</p>
+          <svg id="cum" viewBox="0 0 420 240" role="img"
+               aria-label="나이별 누적 납입액과 누적 수령액"></svg>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <section class="panel">
+      <h2>고정한 가정</h2>
+      <dl>
+        <dt>물가상승률</dt><dd>2.0%</dd>
+        <dt>명목 임금상승률</dt><dd>3.1%</dd>
+        <dt>A값 (전체 가입자 평균소득)</dt><dd>310만원</dd>
+        <dt>취업 나이</dt><dd>27세</dd>
+        <dt>65세 기대여명</dt><dd id="le-out">21.5년</dd>
+        <dt>보험료율</dt><dd>9% → 13% (2026~2033 단계 인상)</dd>
+        <dt>소득대체율</dt><dd>43%</dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2>이 숫자를 믿기 전에</h2>
+      <p>
+        기본값 <b>실질 할인율 0.55%</b>는 제가 고른 값이 아닙니다.
+        국민연금연구원이 공표한 1990년생 남성 수익비 <b>1.62배</b>를 재현하도록
+        거꾸로 계산해 맞춘 값입니다. 모델이 공표치를 맞힌 게 아니라, 맞추도록 맞춰놓은 것입니다.
+      </p>
+      <p>
+        할인율에 정답은 없습니다. 기관마다 다르게 씁니다. 그래서 이 계산기를 만들었습니다.
+        <b>0%에서 3%까지 밀어보면 같은 사람이 1.92배에서 0.76배까지 갑니다.</b>
+        어떤 기사의 수익비든 이 과정을 거쳐 나온 숫자입니다.
+      </p>
+      <p>
+        보험료는 사업장 부담분을 포함한 <b>전액 기준</b>입니다. 내 통장에서 빠진 절반만 세면
+        수익비는 두 배가 됩니다. 급여액은 국민연금 산식
+        <b>상수 × (A + B) × (1 + 0.05n/12)</b>을 그대로 적용했습니다.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>출처</h2>
+      <div class="src">
+        <span>국민연금연구원 — 세대별 수익비 추계</span>
+        <span>국회예산정책처 (2026) — 기금 소진 2065년, 적자 전환 2048년</span>
+        <span>통계청 — 장래인구추계, 생명표</span>
+        <span>국민연금법 — 보험료율 · 소득대체율 · 급여 산식</span>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    인생 정산소 · 낸 돈과 받을 돈, 끝까지 정산합니다
+  </footer>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    /* ── 모델 (영상에 쓴 pension.ts와 동일) ───────────── */
+    var A_VALUE = 310;      // 만원
+    var INFLATION = 0.02;
+    var WAGE_GROWTH = 0.031;
+    var ENTRY_AGE = 27;
+    var REPLACEMENT = 0.43;
+
+    function contributionRate(year) {
+      if (year < 2026) return 0.09;
+      return Math.min(0.13, 0.09 + (year - 2025) * 0.005);
+    }
+
+    function pensionAge(birthYear) {
+      if (birthYear <= 1952) return 60;
+      if (birthYear <= 1956) return 61;
+      if (birthYear <= 1960) return 62;
+      if (birthYear <= 1964) return 63;
+      if (birthYear <= 1968) return 64;
+      return 65;
+    }
+
+    function calculate(c, d) {
+      var pAge = pensionAge(c.birthYear);
+      var real = WAGE_GROWTH - INFLATION;
+      var pv = function (age) { return Math.pow(1 + d, -(age - ENTRY_AGE)); };
+
+      var paid = 0, received = 0, timeline = [], i, age;
+
+      for (i = 0; i < c.years; i++) {
+        age = ENTRY_AGE + i;
+        paid += c.income * Math.pow(1 + real, i) * 12
+              * contributionRate(c.birthYear + age) * pv(age);
+        timeline.push({ age: age, paid: paid, received: 0 });
+      }
+      for (age = ENTRY_AGE + c.years; age < pAge; age++) {
+        timeline.push({ age: age, paid: paid, received: 0 });
+      }
+
+      // 급여식의 절반은 본인 소득(B)이 아니라 전체 평균(A)이다 — 여기서 재분배가 나온다
+      var B = c.income * (Math.pow(1 + real, c.years) - 1) / (real * c.years);
+      var k = 1.2 * (REPLACEMENT / 0.4);
+      var n = Math.max(0, c.years * 12 - 240);
+      var monthly = k * (A_VALUE + B) * (1 + 0.05 * n / 12) / 12;
+
+      var breakEven = null;
+      var last = Math.round(pAge + c.lifeExp);
+      for (age = pAge; age <= last; age++) {
+        received += monthly * 12 * pv(age);
+        if (breakEven === null && received >= paid) breakEven = age;
+        timeline.push({ age: age, paid: paid, received: received });
+      }
+
+      return {
+        paid: paid, received: received, ratio: received / paid,
+        breakEven: breakEven, pensionAge: pAge, monthly: monthly, timeline: timeline
+      };
+    }
+
+    /* ── 상태 ─────────────────────────────────────────── */
+    var DEFAULTS = { birthYear: 1990, sex: 'M', income: 320, years: 33, disc: 55 };
+    var state = Object.assign({}, DEFAULTS);
+    var lifeExp = function () { return state.sex === 'M' ? 21.5 : 26.5; };
+
+    var $ = function (id) { return document.getElementById(id); };
+    var NS = 'http://www.w3.org/2000/svg';
+    var css = function (name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    };
+
+    function el(tag, attrs) {
+      var node = document.createElementNS(NS, tag);
+      for (var k in attrs) { if (attrs[k] !== undefined) node.setAttribute(k, attrs[k]); }
+      return node;
+    }
+
+    /* ── 차트 1 · 할인율 → 수익비 ─────────────────────── */
+    function drawCurve(current) {
+      var svg = $('curve');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      var L = 42, R = 408, T = 16, Bm = 208;
+      var dMax = 0.03, rMax = 2.2;
+      var px = function (d) { return L + (d / dMax) * (R - L); };
+      var py = function (r) { return Bm - (Math.min(r, rMax) / rMax) * (Bm - T); };
+
+      var pts = [], i, d;
+      for (i = 0; i <= 60; i++) {
+        d = (i * dMax) / 60;
+        pts.push({ d: d, r: calculate(cohort(), d).ratio });
+      }
+
+      // 세로 눈금
+      [0, 0.5, 1, 1.5, 2].forEach(function (r) {
+        svg.appendChild(el('line', {
+          x1: L, x2: R, y1: py(r), y2: py(r),
+          stroke: css('--line'), 'stroke-width': 1,
+          'stroke-dasharray': r === 1 ? '6 5' : '2 8',
+          opacity: r === 1 ? 0.95 : 0.6
+        }));
+        var t = el('text', {
+          x: L - 8, y: py(r) + 4, 'text-anchor': 'end',
+          fill: r === 1 ? css('--text') : css('--dim'),
+          'font-size': 10, 'font-family': 'IBM Plex Mono, monospace'
+        });
+        t.textContent = r.toFixed(1);
+        svg.appendChild(t);
+      });
+
+      // 가로 눈금
+      [0, 1, 2, 3].forEach(function (p) {
+        var t = el('text', {
+          x: px(p / 100), y: Bm + 18, 'text-anchor': 'middle',
+          fill: css('--dim'), 'font-size': 10, 'font-family': 'IBM Plex Mono, monospace'
+        });
+        t.textContent = p + '%';
+        svg.appendChild(t);
+      });
+
+      // 본전선 위/아래로 색이 갈리는 곡선
+      var cross = 1;
+      for (i = 0; i < pts.length; i++) { if (pts[i].r < 1) { cross = i / 60; break; } }
+      var grad = el('linearGradient', { id: 'g', x1: '0', x2: '1' });
+      [[0, '--fund'], [Math.max(0, cross - 0.02), '--fund'],
+       [Math.min(1, cross + 0.02), '--alert'], [1, '--alert']].forEach(function (s) {
+        grad.appendChild(el('stop', { offset: s[0], 'stop-color': css(s[1]) }));
+      });
+      var defs = el('defs', {});
+      defs.appendChild(grad);
+      svg.appendChild(defs);
+
+      svg.appendChild(el('path', {
+        d: pts.map(function (p, j) {
+          return (j ? 'L' : 'M') + px(p.d).toFixed(1) + ' ' + py(p.r).toFixed(1);
+        }).join(' '),
+        fill: 'none', stroke: 'url(#g)', 'stroke-width': 2.5, 'stroke-linecap': 'round'
+      }));
+
+      // 현재 지점
+      var cx = px(state.disc / 10000), cy = py(current.ratio);
+      var hot = current.ratio >= 1 ? css('--fund') : css('--alert');
+      svg.appendChild(el('line', {
+        x1: cx, x2: cx, y1: cy, y2: Bm, stroke: hot,
+        'stroke-width': 1, 'stroke-dasharray': '3 4', opacity: 0.55
+      }));
+      svg.appendChild(el('circle', { cx: cx, cy: cy, r: 9, fill: hot, opacity: 0.2 }));
+      svg.appendChild(el('circle', { cx: cx, cy: cy, r: 4.5, fill: hot }));
+
+      var lab = el('text', {
+        x: Math.min(cx + 10, R - 4), y: Math.max(cy - 11, T + 10),
+        'text-anchor': cx > R - 70 ? 'end' : 'start',
+        fill: hot, 'font-size': 13, 'font-weight': 600,
+        'font-family': 'IBM Plex Mono, monospace'
+      });
+      lab.textContent = current.ratio.toFixed(2) + '배';
+      svg.appendChild(lab);
+    }
+
+    /* ── 차트 2 · 누적 납입 vs 수령 ───────────────────── */
+    function drawCum(res) {
+      var svg = $('cum');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      var L = 42, R = 408, T = 16, Bm = 208;
+      var tl = res.timeline;
+      var a0 = tl[0].age, a1 = tl[tl.length - 1].age;
+      var vMax = Math.max(res.paid, res.received) * 1.08 || 1;
+      var gx = function (a) { return L + ((a - a0) / (a1 - a0)) * (R - L); };
+      var gy = function (v) { return Bm - (v / vMax) * (Bm - T); };
+
+      svg.appendChild(el('line', {
+        x1: L, x2: R, y1: Bm, y2: Bm, stroke: css('--line'), 'stroke-width': 1
+      }));
+
+      [a0, 40, 50, 60, 70, 80, a1].forEach(function (a) {
+        if (a < a0 || a > a1) return;
+        var t = el('text', {
+          x: gx(a), y: Bm + 18, 'text-anchor': 'middle',
+          fill: css('--dim'), 'font-size': 10, 'font-family': 'IBM Plex Mono, monospace'
+        });
+        t.textContent = a;
+        svg.appendChild(t);
+      });
+
+      var line = function (key, color) {
+        svg.appendChild(el('polyline', {
+          points: tl.map(function (p) { return gx(p.age).toFixed(1) + ',' + gy(p[key]).toFixed(1); }).join(' '),
+          fill: 'none', stroke: color, 'stroke-width': 2.5, 'stroke-linejoin': 'round'
+        }));
+      };
+      line('paid', css('--fund'));
+      line('received', css('--gen'));
+
+      // 범례
+      [['누적 납입', css('--fund'), 0], ['누적 수령', css('--gen'), 96]].forEach(function (g) {
+        svg.appendChild(el('rect', { x: L + g[2], y: T, width: 14, height: 3, rx: 1.5, fill: g[1] }));
+        var t = el('text', {
+          x: L + g[2] + 20, y: T + 6, fill: g[1], 'font-size': 11, 'font-weight': 600
+        });
+        t.textContent = g[0];
+        svg.appendChild(t);
+      });
+
+      if (res.breakEven) {
+        var bx = gx(res.breakEven);
+        svg.appendChild(el('line', {
+          x1: bx, x2: bx, y1: T + 16, y2: Bm, stroke: css('--text'),
+          'stroke-width': 1, 'stroke-dasharray': '4 5', opacity: 0.5
+        }));
+        svg.appendChild(el('circle', { cx: bx, cy: gy(res.paid), r: 4, fill: css('--text') }));
+        var t = el('text', {
+          x: Math.min(bx + 8, R - 4), y: gy(res.paid) - 9,
+          'text-anchor': bx > R - 60 ? 'end' : 'start',
+          fill: css('--text'), 'font-size': 12, 'font-weight': 600,
+          'font-family': 'IBM Plex Mono, monospace'
+        });
+        t.textContent = res.breakEven + '세';
+        svg.appendChild(t);
+      }
+    }
+
+    /* ── 렌더 ─────────────────────────────────────────── */
+    function cohort() {
+      return {
+        birthYear: state.birthYear, years: state.years,
+        income: state.income, lifeExp: lifeExp()
+      };
+    }
+
+    function render() {
+      var d = state.disc / 10000;
+      var res = calculate(cohort(), d);
+      var over = res.ratio >= 1;
+      var hot = over ? css('--fund') : css('--alert');
+
+      $('birth-out').textContent = state.birthYear + '년';
+      $('income-out').textContent = state.income + '만원';
+      $('years-out').textContent = state.years + '년';
+      $('disc-out').textContent = (state.disc / 100).toFixed(2) + '%';
+      $('le-out').textContent = lifeExp().toFixed(1) + '년';
+
+      $('ratio').innerHTML = res.ratio.toFixed(2) + '<small>배</small>';
+      $('ratio').style.color = hot;
+
+      $('verdict-line').textContent = over
+        ? '낸 돈보다 많이 받습니다'
+        : '낸 돈보다 적게 받습니다';
+      $('verdict-line').style.color = hot;
+
+      $('paid').innerHTML = (res.paid / 10000).toFixed(2) + '<span>억원</span>';
+      $('recv').innerHTML = (res.received / 10000).toFixed(2) + '<span>억원</span>';
+      $('monthly').innerHTML = Math.round(res.monthly) + '<span>만원</span>';
+
+      if (res.breakEven) {
+        $('be').innerHTML = res.breakEven + '<span>세</span>';
+        $('be').style.color = css('--text');
+      } else {
+        $('be').innerHTML = '없음<span>기대수명 내</span>';
+        $('be').style.color = css('--alert');
+      }
+
+      drawCurve(res);
+      drawCum(res);
+    }
+
+    /* ── 입력 ─────────────────────────────────────────── */
+    function bind(id, key) {
+      $(id).addEventListener('input', function (e) {
+        state[key] = Number(e.target.value);
+        render();
+      });
+    }
+    bind('birth', 'birthYear');
+    bind('income', 'income');
+    bind('years', 'years');
+    bind('disc', 'disc');
+
+    function setSex(s) {
+      state.sex = s;
+      $('sex-m').setAttribute('aria-pressed', String(s === 'M'));
+      $('sex-f').setAttribute('aria-pressed', String(s === 'F'));
+      render();
+    }
+    $('sex-m').addEventListener('click', function () { setSex('M'); });
+    $('sex-f').addEventListener('click', function () { setSex('F'); });
+
+    $('reset').addEventListener('click', function () {
+      state = Object.assign({}, DEFAULTS);
+      $('birth').value = state.birthYear;
+      $('income').value = state.income;
+      $('years').value = state.years;
+      $('disc').value = state.disc;
+      setSex('M');
+    });
+
+    render();
+  })();
+</script>
