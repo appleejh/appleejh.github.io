@@ -35,6 +35,16 @@ export const ASSUMPTIONS = {
    * 저소득자일수록 수익비가 높아지는 재분배가 여기서 나온다.
    */
   aValueManwon: 310,
+  /**
+   * 기준소득월액 상한 (2026.7~2027.6, 만원). 이보다 많이 벌어도 보험료와
+   * 급여는 이 금액까지만 계산된다.
+   *
+   * 상한은 매년 A값 변동률(≈ 임금상승률)만큼 오른다. 모델의 개인 소득도
+   * 같은 임금상승률로 오르므로, 가입 첫해에 상한 아래였던 사람은 끝까지
+   * 안 걸리고 위였던 사람은 끝까지 상한에 붙어 있다. 그래서 첫해 소득에만
+   * min()을 걸면 된다. 1·2편 주인공(월 320만원)은 해당 없음.
+   */
+  incomeCapManwon: 659,
   source: '국민연금법 / 통계청 장래인구추계·생명표 / 국회예산정책처 추계',
   retrieved: '2026-09',
 } as const;
@@ -124,15 +134,18 @@ export function calculate(
   const timeline: Result['timeline'] = [];
   let paidCum = 0;
   let receivedCum = 0;
+  let cappedSum = 0;
 
   // 1) 납입 단계
   for (let i = 0; i < years; i++) {
     const age = entryAge + i;
     const year = birthYear + age;
     const rate = regime.contributionRate(year);
-    // 실질 임금상승 반영 (명목 임금상승률 - 물가)
+    // 실질 임금상승 반영 (명목 임금상승률 - 물가). 상한을 넘는 소득은 안 셈한다.
     const realIncome =
-      monthlyIncomeManwon * Math.pow(1 + (ASSUMPTIONS.wageGrowth - r), i);
+      Math.min(ASSUMPTIONS.incomeCapManwon, monthlyIncomeManwon) *
+      Math.pow(1 + (ASSUMPTIONS.wageGrowth - r), i);
+    cappedSum += realIncome;
     paidCum += realIncome * 12 * rate * pv(age);
     timeline.push({ age, paidCum, receivedCum });
   }
@@ -152,10 +165,11 @@ export function calculate(
   // (A + B)에서 A가 절반을 차지하는 게 핵심이다. 소득이 낮을수록 B가 작아
   // 급여 대비 본인 기여가 줄고, 그래서 수익비가 올라간다. 이 재분배를 빼고
   // 계산하면 저소득층 수익비가 실제보다 크게 과소평가된다.
-  const B =
-    (monthlyIncomeManwon *
-      (Math.pow(1 + (ASSUMPTIONS.wageGrowth - r), years) - 1)) /
-    ((ASSUMPTIONS.wageGrowth - r) * years);
+  //
+  // B는 상한을 적용한 연도별 소득의 평균이다. 상한에 안 걸리는 사람은
+  // 예전 등비급수 공식과 같은 값이 나온다 (연속 근사 대신 연 단위 합이라
+  // 아주 미세하게 다를 수 있다 — report.ts가 1.62배를 다시 확인한다).
+  const B = cappedSum / years;
   const k = 1.2 * (regime.replacementRate() / 0.4);
   const n = Math.max(0, years * 12 - 240);
   const monthlyPension =
