@@ -266,6 +266,8 @@
   @media (prefers-reduced-motion: no-preference) {
     .ratio, .stat dd { transition: color 220ms ease; }
   }
+  .hint { margin: 8px 0 0; font-size: 12.5px; color: var(--gen); line-height: 1.5; }
+  .hint[hidden] { display: none; }
 </style>
 
 <div class="wrap">
@@ -311,7 +313,8 @@
           <label for="income">가입기간 평균 월소득</label>
           <output id="income-out" for="income">320만원</output>
         </div>
-        <input type="range" id="income" min="100" max="600" step="10" value="320">
+        <input type="range" id="income" min="100" max="1000" step="10" value="320">
+        <p class="hint" id="cap-hint" hidden>659만원 위는 보험료도 연금도 659만원으로 계산됩니다 (기준소득월액 상한)</p>
       </div>
 
       <div class="field">
@@ -320,6 +323,14 @@
           <output id="years-out" for="years">33년</output>
         </div>
         <input type="range" id="years" min="10" max="40" step="1" value="33">
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label for="life">수명 조정 (평균 대비)</label>
+          <output id="life-out" for="life">±0년</output>
+        </div>
+        <input type="range" id="life" min="-5" max="5" step="1" value="0">
       </div>
 
       <div class="field field--key">
@@ -341,7 +352,8 @@
         <div class="ratio" id="ratio">1.62<small>배</small></div>
         <p class="verdict-note">
           <strong id="verdict-line">낸 돈보다 많이 받습니다</strong>
-          수익비 = 평생 받는 돈 ÷ 평생 내는 돈
+          수익비 = 평생 받는 돈 ÷ 평생 내는 돈<br>
+          남는 돈(받는 돈 − 내는 돈) <b id="net">1.00억원</b>
         </p>
       </div>
 
@@ -380,6 +392,7 @@
         <dt>65세 기대여명</dt><dd id="le-out">21.5년</dd>
         <dt>보험료율</dt><dd>9% → 13% (2026~2033 단계 인상)</dd>
         <dt>소득대체율</dt><dd>43%</dd>
+        <dt>기준소득월액 상한</dt><dd>659만원 (2026.7~)</dd>
       </dl>
     </section>
 
@@ -408,6 +421,7 @@
         <span>국민연금연구원 — 세대별 수익비 추계</span>
         <span>국회예산정책처 (2026) — 기금 소진 2065년, 적자 전환 2048년</span>
         <span>통계청 — 장래인구추계, 생명표</span>
+        <span>한국건강형평성학회 — 소득 상위·하위 20% 기대수명 격차 (시도별 4.3~7.6년)</span>
         <span>국민연금법 — 보험료율 · 소득대체율 · 급여 산식</span>
       </div>
     </section>
@@ -428,6 +442,8 @@
     var WAGE_GROWTH = 0.031;
     var ENTRY_AGE = 27;
     var REPLACEMENT = 0.43;
+    // 기준소득월액 상한. 상한도 A값만큼 매년 오르므로 첫해 소득에만 걸면 된다 (pension.ts와 동일)
+    var INCOME_CAP = 659;
 
     function contributionRate(year) {
       if (year < 2026) return 0.09;
@@ -452,7 +468,7 @@
 
       for (i = 0; i < c.years; i++) {
         age = ENTRY_AGE + i;
-        paid += c.income * Math.pow(1 + real, i) * 12
+        paid += Math.min(c.income, INCOME_CAP) * Math.pow(1 + real, i) * 12
               * contributionRate(c.birthYear + age) * pv(age);
         timeline.push({ age: age, paid: paid, received: 0 });
       }
@@ -461,7 +477,7 @@
       }
 
       // 급여식의 절반은 본인 소득(B)이 아니라 전체 평균(A)이다 — 여기서 재분배가 나온다
-      var B = c.income * (Math.pow(1 + real, c.years) - 1) / (real * c.years);
+      var B = Math.min(c.income, INCOME_CAP) * (Math.pow(1 + real, c.years) - 1) / (real * c.years);
       var k = 1.2 * (REPLACEMENT / 0.4);
       var n = Math.max(0, c.years * 12 - 240);
       var monthly = k * (A_VALUE + B) * (1 + 0.05 * n / 12) / 12;
@@ -481,9 +497,9 @@
     }
 
     /* ── 상태 ─────────────────────────────────────────── */
-    var DEFAULTS = { birthYear: 1990, sex: 'M', income: 320, years: 33, disc: 55 };
+    var DEFAULTS = { birthYear: 1990, sex: 'M', income: 320, years: 33, disc: 55, life: 0 };
     var state = Object.assign({}, DEFAULTS);
-    var lifeExp = function () { return state.sex === 'M' ? 21.5 : 26.5; };
+    var lifeExp = function () { return (state.sex === 'M' ? 21.5 : 26.5) + state.life; };
 
     var $ = function (id) { return document.getElementById(id); };
     var NS = 'http://www.w3.org/2000/svg';
@@ -661,6 +677,10 @@
       $('years-out').textContent = state.years + '년';
       $('disc-out').textContent = (state.disc / 100).toFixed(2) + '%';
       $('le-out').textContent = lifeExp().toFixed(1) + '년';
+      $('life-out').textContent = (state.life > 0 ? '+' : state.life < 0 ? '−' : '±') + Math.abs(state.life) + '년';
+      $('cap-hint').hidden = state.income <= INCOME_CAP;
+      var net = res.received - res.paid;
+      $('net').textContent = (net < 0 ? '−' : '') + (Math.abs(net) / 10000).toFixed(2) + '억원';
 
       $('ratio').innerHTML = res.ratio.toFixed(2) + '<small>배</small>';
       $('ratio').style.color = hot;
@@ -697,6 +717,7 @@
     bind('income', 'income');
     bind('years', 'years');
     bind('disc', 'disc');
+    bind('life', 'life');
 
     function setSex(s) {
       state.sex = s;
@@ -713,6 +734,7 @@
       $('income').value = state.income;
       $('years').value = state.years;
       $('disc').value = state.disc;
+      $('life').value = state.life;
       setSex('M');
     });
 
